@@ -54,6 +54,7 @@ app.get('/restaurants/full', async (req, res) => {
     try {
         // ดึงข้อมูลร้านอาหาร
         const [restaurants] = await pool.query('SELECT * FROM restaurants');
+        console.log("Restaurants:", restaurants); // ✅ Debug ดูค่าที่ดึงได้
 
         if (restaurants.length === 0) {
             return res.status(404).json({ error: 'No restaurants found' });
@@ -61,17 +62,17 @@ app.get('/restaurants/full', async (req, res) => {
 
         // ดึงข้อมูลเมนูทั้งหมด
         const [menus] = await pool.query('SELECT * FROM menu');
+        console.log("Menus:", menus); // ✅ Debug ดูค่าที่ดึงได้
 
         // รวมเมนูเข้ากับร้านอาหารแต่ละร้าน
-        const restaurantsWithMenu = restaurants.map(restaurant => {
-            return {
-                ...restaurant,
-                menu: menus.filter(menu => menu.restaurant_id === restaurant.id)
-            };
-        });
+        const restaurantsWithMenu = restaurants.map(restaurant => ({
+            ...restaurant,
+            menu: menus.filter(menu => menu.restaurant_id === restaurant.id)
+        }));
 
         res.json(restaurantsWithMenu);
     } catch (err) {
+        console.error("❌ Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
