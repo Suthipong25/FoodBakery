@@ -4,216 +4,147 @@ const mysql = require('mysql2');
 require('dotenv').config();
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 const connection = mysql.createConnection(process.env.DATABASE_URL);
 
 // ตรวจสอบการเชื่อมต่อฐานข้อมูล
-connection.connect((err) => {
+connection.connect(err => {
     if (err) {
         console.error('Database connection failed:', err.stack);
         return;
     }
-    console.log('Connected to database');
+    console.log('Connected to database.');
 });
 
-// เส้นทางหลัก
-app.get('/', (req, res) => {
-    res.send('Welcome to Restaurant API!');
-});
-
-// ดึงข้อมูลร้านอาหารทั้งหมด รวมข้อมูลเมนู
+// ดึงร้านอาหารทั้งหมด
 app.get('/restaurants', (req, res) => {
-    const sql = `
-        SELECT 
-            r.id AS restaurant_id,
-            r.name AS restaurant_name,
-            r.description AS restaurant_description,
-            r.address AS restaurant_address,
-            r.avatar AS restaurant_avatar,
-            m.id AS menu_id,
-            m.name AS menu_name,
-            m.price AS menu_price,
-            m.description AS menu_description,
-            m.image_url AS menu_image_url
-        FROM restaurants r
-        LEFT JOIN menus m ON r.id = m.restaurant_id;
-    `;
-
-    connection.query(sql, (err, results) => {
+    connection.query('SELECT * FROM restaurants', (err, results) => {
         if (err) {
-            console.error('Error fetching restaurants and menus:', err);
-            res.status(500).send('Internal Server Error');
+            res.status(500).send(err);
         } else {
-            // สร้าง array ของ restaurants โดยมีเมนูเป็น array ภายในแต่ละร้าน
-            const formattedResults = [];
-            let currentRestaurant = null;
-
-            results.forEach(row => {
-                if (currentRestaurant && currentRestaurant.restaurant_id === row.restaurant_id) {
-                    // เพิ่มเมนูเข้าไปในร้านอาหารที่มีอยู่แล้ว
-                    if (row.menu_id) {
-                        currentRestaurant.menu.push({
-                            id: row.menu_id,
-                            name: row.menu_name,
-                            price: row.menu_price,
-                            description: row.menu_description,
-                            image_url: row.menu_image_url
-                        });
-                    }
-                } else {
-                    // สร้างร้านอาหารใหม่
-                    if (currentRestaurant) {
-                        formattedResults.push(currentRestaurant);
-                    }
-                    currentRestaurant = {
-                        id: row.restaurant_id,
-                        name: row.restaurant_name,
-                        description: row.restaurant_description,
-                        address: row.restaurant_address,
-                        avatar: row.restaurant_avatar,
-                        menu: [] // สร้าง array สำหรับเมนู
-                    };
-
-                    // เพิ่มเมนูแรกเข้าไป
-                    if (row.menu_id) {
-                        currentRestaurant.menu.push({
-                            id: row.menu_id,
-                            name: row.menu_name,
-                            price: row.menu_price,
-                            description: row.menu_description,
-                            image_url: row.menu_image_url
-                        });
-                    }
-                }
-            });
-
-            // เพิ่มร้านอาหารสุดท้ายที่ค้างอยู่
-            if (currentRestaurant) {
-                formattedResults.push(currentRestaurant);
-            }
-
-            // ส่งข้อมูลในรูปแบบที่ต้องการ
-            res.status(200).json({ restaurants: formattedResults });
+            res.send(results);
         }
     });
 });
 
-// ดึงข้อมูลร้านอาหารตาม ID รวมข้อมูลเมนู
+// ดึงข้อมูลร้านอาหารตาม ID
 app.get('/restaurants/:id', (req, res) => {
-    const { id } = req.params;
-    const sql = `
-        SELECT 
-            r.id AS restaurant_id,
-            r.name AS restaurant_name,
-            r.description AS restaurant_description,
-            r.address AS restaurant_address,
-            r.avatar AS restaurant_avatar,
-            m.id AS menu_id,
-            m.name AS menu_name,
-            m.price AS menu_price,
-            m.description AS menu_description,
-            m.image_url AS menu_image_url
-        FROM restaurants r
-        LEFT JOIN menus m ON r.id = m.restaurant_id
-        WHERE r.id = ?;
-    `;
-
-    connection.query(sql, [id], (err, results) => {
+    const id = req.params.id;
+    connection.query('SELECT * FROM restaurants WHERE id = ?', [id], (err, results) => {
         if (err) {
-            console.error('Error fetching restaurant:', err);
-            res.status(500).send('Internal Server Error');
+            res.status(500).send(err);
         } else {
-            const formattedResults = [];
-            let currentRestaurant = null;
+            res.send(results);
+        }
+    });
+});
 
-            results.forEach(row => {
-                if (currentRestaurant && currentRestaurant.restaurant_id === row.restaurant_id) {
-                    // เพิ่มเมนูเข้าไปในร้านอาหารที่มีอยู่แล้ว
-                    if (row.menu_id) {
-                        currentRestaurant.menu.push({
-                            id: row.menu_id,
-                            name: row.menu_name,
-                            price: row.menu_price,
-                            description: row.menu_description,
-                            image_url: row.menu_image_url
-                        });
-                    }
-                } else {
-                    // สร้างร้านอาหารใหม่
-                    if (currentRestaurant) {
-                        formattedResults.push(currentRestaurant);
-                    }
-                    currentRestaurant = {
-                        id: row.restaurant_id,
-                        name: row.restaurant_name,
-                        description: row.restaurant_description,
-                        address: row.restaurant_address,
-                        avatar: row.restaurant_avatar,
-                        menu: [] // สร้าง array สำหรับเมนู
-                    };
-
-                    // เพิ่มเมนูแรกเข้าไป
-                    if (row.menu_id) {
-                        currentRestaurant.menu.push({
-                            id: row.menu_id,
-                            name: row.menu_name,
-                            price: row.menu_price,
-                            description: row.menu_description,
-                            image_url: row.menu_image_url
-                        });
-                    }
-                }
-            });
-
-            // เพิ่มร้านอาหารสุดท้ายที่ค้างอยู่
-            if (currentRestaurant) {
-                formattedResults.push(currentRestaurant);
-            }
-
-            // ส่งข้อมูลในรูปแบบที่ต้องการ
-            res.status(200).json({ restaurants: formattedResults });
+// ดึงเมนูของร้านอาหารตาม ID ร้าน
+app.get('/restaurants/:id/menu', (req, res) => {
+    const id = req.params.id;
+    connection.query('SELECT * FROM menu WHERE restaurant_id = ?', [id], (err, results) => {
+        if (err) {
+            res.status(500).send(err);
+        } else {
+            res.send(results);
         }
     });
 });
 
 // เพิ่มร้านอาหารใหม่
 app.post('/restaurants', (req, res) => {
-    const { id, name, description, address, avatar } = req.body;
-    connection.query('INSERT INTO restaurants (id, name, description, address, avatar) VALUES (?, ?, ?, ?, ?)',
-        [id, name, description, address, avatar],
+    const { name, description, address, avatar } = req.body;
+    connection.query(
+        'INSERT INTO restaurants (name, description, address, avatar) VALUES (?, ?, ?, ?)',
+        [name, description, address, avatar],
         (err, results) => {
             if (err) {
-                console.error('Error adding restaurant:', err);
-                res.status(500).send('Internal Server Error');
+                res.status(500).send(err);
             } else {
-                res.status(201).json({ message: 'Restaurant added successfully', id: results.insertId });
+                res.status(201).send({ id: results.insertId, ...req.body });
             }
-        });
+        }
+    );
 });
 
 // เพิ่มเมนูใหม่ในร้านอาหาร
-app.post('/menus', (req, res) => {
+app.post('/menu', (req, res) => {
     const { restaurant_id, name, price, description, image_url } = req.body;
-    connection.query('INSERT INTO menus (restaurant_id, name, price, description, image_url) VALUES (?, ?, ?, ?, ?)',
+    connection.query(
+        'INSERT INTO menu (restaurant_id, name, price, description, image_url) VALUES (?, ?, ?, ?, ?)',
         [restaurant_id, name, price, description, image_url],
         (err, results) => {
             if (err) {
-                console.error('Error adding menu:', err);
-                res.status(500).send('Internal Server Error');
+                res.status(500).send(err);
             } else {
-                res.status(201).json({ message: 'Menu added successfully', id: results.insertId });
+                res.status(201).send({ id: results.insertId, ...req.body });
             }
-        });
+        }
+    );
 });
 
-// เริ่มต้นเซิร์ฟเวอร์
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+// อัปเดตร้านอาหาร
+app.put('/restaurants/:id', (req, res) => {
+    const { name, description, address, avatar } = req.body;
+    const id = req.params.id;
+    connection.query(
+        'UPDATE restaurants SET name=?, description=?, address=?, avatar=? WHERE id=?',
+        [name, description, address, avatar, id],
+        (err, results) => {
+            if (err) {
+                res.status(500).send(err);
+            } else {
+                res.send({ id, ...req.body });
+            }
+        }
+    );
 });
 
-// ส่งออกแอปเพื่อรองรับ Vercel
+// อัปเดตเมนู
+app.put('/menu/:id', (req, res) => {
+    const { name, price, description, image_url } = req.body;
+    const id = req.params.id;
+    connection.query(
+        'UPDATE menu SET name=?, price=?, description=?, image_url=? WHERE id=?',
+        [name, price, description, image_url, id],
+        (err, results) => {
+            if (err) {
+                res.status(500).send(err);
+            } else {
+                res.send({ id, ...req.body });
+            }
+        }
+    );
+});
+
+// ลบร้านอาหาร
+app.delete('/restaurants/:id', (req, res) => {
+    const id = req.params.id;
+    connection.query('DELETE FROM restaurants WHERE id = ?', [id], (err, results) => {
+        if (err) {
+            res.status(500).send(err);
+        } else {
+            res.send({ message: 'Deleted successfully' });
+        }
+    });
+});
+
+// ลบเมนู
+app.delete('/menu/:id', (req, res) => {
+    const id = req.params.id;
+    connection.query('DELETE FROM menu WHERE id = ?', [id], (err, results) => {
+        if (err) {
+            res.status(500).send(err);
+        } else {
+            res.send({ message: 'Deleted successfully' });
+        }
+    });
+});
+
+app.listen(process.env.PORT || 3000, () => {
+    console.log('Server is running on port 3000');
+});
+
 module.exports = app;
