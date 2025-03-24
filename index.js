@@ -4,190 +4,161 @@ const mysql = require('mysql2');
 require('dotenv').config();
 
 const app = express();
+
+// ตั้งค่า CORS และให้ใช้งาน JSON
 app.use(cors());
 app.use(express.json());
 
-// สร้าง connection pool
-const pool = mysql.createPool(process.env.DATABASE_URL).promise();
+// เชื่อมต่อกับฐานข้อมูล MySQL
+const connection = mysql.createConnection(process.env.DATABASE_URL);
 
-// ตรวจสอบการเชื่อมต่อฐานข้อมูล
-pool.getConnection()
-    .then(connection => {
-        console.log('✅ Connected to database.');
-        connection.release();
-    })
-    .catch(err => console.error('❌ Database connection failed:', err.stack));
-
-// ✅ ดึงข้อมูลร้านอาหารทั้งหมด
-app.get('/restaurants', async (req, res) => {
-    try {
-        const [results] = await pool.query('SELECT * FROM restaurants');
-        res.json(results);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+// ตรวจสอบการเชื่อมต่อ
+connection.connect((err) => {
+  if (err) {
+    console.error('Error connecting to the database:', err);
+    return;
+  }
+  console.log('Connected to the database');
 });
 
-// ✅ ดึงข้อมูลร้านอาหารตาม ID
-app.get('/restaurants/:id', async (req, res) => {
-    try {
-        const [results] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [req.params.id]);
-        if (results.length === 0) return res.status(404).json({ error: 'Restaurant not found' });
-        res.json(results[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// API หลักเพื่อดึงข้อมูลร้านอาหารและเมนูทั้งหมด
+app.get('/restaurants', (req, res) => {
+  connection.query(
+    'SELECT * FROM restaurants',
+    (err, restaurants) => {
+      if (err) {
+        return res.status(500).send('Error fetching restaurants');
+      }
 
-// ✅ ดึงเมนูของร้านอาหารตาม ID
-app.get('/restaurants/:id/menu', async (req, res) => {
-    try {
-        const [results] = await pool.query('SELECT * FROM menu WHERE restaurant_id = ?', [req.params.id]);
-        res.json(results);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+      // ดึงเมนูทั้งหมด
+      connection.query(
+        'SELECT * FROM menu',
+        (err, menu) => {
+          if (err) {
+            return res.status(500).send('Error fetching menu');
+          }
 
-// ✅ ดึงข้อมูลร้านอาหารทั้งหมดพร้อมเมนู
-app.get('/restaurants/full', async (req, res) => {
-    try {
-        // ดึงข้อมูลร้านอาหาร
-        const [restaurants] = await pool.query('SELECT * FROM restaurants');
-        console.log("Restaurants:", restaurants); // ✅ Debug ดูค่าที่ดึงได้
-
-        if (restaurants.length === 0) {
-            return res.status(404).json({ error: 'No restaurants found' });
-        }
-
-        // ดึงข้อมูลเมนูทั้งหมด
-        const [menus] = await pool.query('SELECT * FROM menu');
-        console.log("Menus:", menus); // ✅ Debug ดูค่าที่ดึงได้
-
-        // รวมเมนูเข้ากับร้านอาหารแต่ละร้าน
-        const restaurantsWithMenu = restaurants.map(restaurant => ({
-            ...restaurant,
-            menu: menus.filter(menu => menu.restaurant_id === restaurant.id)
-        }));
-
-        res.json(restaurantsWithMenu);
-    } catch (err) {
-        console.error("❌ Error:", err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ✅ ดึงข้อมูลร้านอาหารพร้อมเมนูตาม ID
-app.get('/restaurants/:id/full', async (req, res) => {
-    try {
-        const restaurantId = req.params.id;
-
-        // ดึงข้อมูลร้านอาหาร
-        const [restaurant] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [restaurantId]);
-
-        if (restaurant.length === 0) {
-            return res.status(404).json({ error: 'Restaurant not found' });
-        }
-
-        // ดึงข้อมูลเมนูของร้านอาหาร
-        const [menu] = await pool.query('SELECT * FROM menu WHERE restaurant_id = ?', [restaurantId]);
-
-        // รวมข้อมูลร้านอาหารและเมนู
-        const restaurantData = {
-            ...restaurant[0],
+          // การเชื่อมโยงร้านอาหารกับเมนู
+          const result = restaurants.map(restaurant => ({
+            id: restaurant.id,
+            name: restaurant.name,
+            description: restaurant.description,
+            address: restaurant.address,
+            avatar: restaurant.avatar,
             menu: menu
-        };
+              .filter(item => item.restaurant_id === restaurant.id)
+              .map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                description: item.description,
+                image_url: item.image_url
+              }))
+          }));
 
-        res.json(restaurantData);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+          res.json({ restaurants: result }); // ส่งข้อมูลกลับเป็น JSON
+        }
+      );
     }
+  );
 });
 
-// ✅ เพิ่มร้านอาหารใหม่
-app.post('/restaurants', async (req, res) => {
-    try {
-        const { name, description, address, avatar } = req.body;
-        const [result] = await pool.query(
-            'INSERT INTO restaurants (name, description, address, avatar) VALUES (?, ?, ?, ?)',
-            [name, description, address, avatar]
-        );
-        res.status(201).json({ id: result.insertId, name, description, address, avatar });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// เพิ่มร้านอาหาร
+app.post('/restaurants', (req, res) => {
+  const { name, description, address, avatar } = req.body;
+  connection.query(
+    'INSERT INTO restaurants (name, description, address, avatar) VALUES (?, ?, ?, ?)',
+    [name, description, address, avatar],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error adding restaurant');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ เพิ่มเมนูใหม่ในร้านอาหาร
-app.post('/menu', async (req, res) => {
-    try {
-        const { restaurant_id, name, price, description, image_url } = req.body;
-        const [result] = await pool.query(
-            'INSERT INTO menu (restaurant_id, name, price, description, image_url) VALUES (?, ?, ?, ?, ?)',
-            [restaurant_id, name, price, description, image_url]
-        );
-        res.status(201).json({ id: result.insertId, restaurant_id, name, price, description, image_url });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// เพิ่มเมนู
+app.post('/menu', (req, res) => {
+  const { restaurant_id, name, price, description, image_url } = req.body;
+  connection.query(
+    'INSERT INTO menu (restaurant_id, name, price, description, image_url) VALUES (?, ?, ?, ?, ?)',
+    [restaurant_id, name, price, description, image_url],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error adding menu item');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ อัปเดตร้านอาหาร
-app.put('/restaurants/:id', async (req, res) => {
-    try {
-        const { name, description, address, avatar } = req.body;
-        const [result] = await pool.query(
-            'UPDATE restaurants SET name=?, description=?, address=?, avatar=? WHERE id=?',
-            [name, description, address, avatar, req.params.id]
-        );
-        if (result.affectedRows === 0) return res.status(404).json({ error: 'Restaurant not found' });
-        res.json({ id: req.params.id, name, description, address, avatar });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// อัพเดตข้อมูลร้านอาหาร
+app.put('/restaurants/:id', (req, res) => {
+  const { name, description, address, avatar } = req.body;
+  const { id } = req.params;
+  connection.query(
+    'UPDATE restaurants SET name=?, description=?, address=?, avatar=? WHERE id=?',
+    [name, description, address, avatar, id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error updating restaurant');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ อัปเดตเมนู
-app.put('/menu/:id', async (req, res) => {
-    try {
-        const { name, price, description, image_url } = req.body;
-        const [result] = await pool.query(
-            'UPDATE menu SET name=?, price=?, description=?, image_url=? WHERE id=?',
-            [name, price, description, image_url, req.params.id]
-        );
-        if (result.affectedRows === 0) return res.status(404).json({ error: 'Menu not found' });
-        res.json({ id: req.params.id, name, price, description, image_url });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// อัพเดตเมนู
+app.put('/menu/:id', (req, res) => {
+  const { name, price, description, image_url } = req.body;
+  const { id } = req.params;
+  connection.query(
+    'UPDATE menu SET name=?, price=?, description=?, image_url=? WHERE id=?',
+    [name, price, description, image_url, id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error updating menu');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ ลบร้านอาหาร
-app.delete('/restaurants/:id', async (req, res) => {
-    try {
-        const [result] = await pool.query('DELETE FROM restaurants WHERE id = ?', [req.params.id]);
-        if (result.affectedRows === 0) return res.status(404).json({ error: 'Restaurant not found' });
-        res.json({ message: 'Restaurant deleted successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// ลบร้านอาหาร
+app.delete('/restaurants/:id', (req, res) => {
+  const { id } = req.params;
+  connection.query(
+    'DELETE FROM restaurants WHERE id=?',
+    [id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error deleting restaurant');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ ลบเมนู
-app.delete('/menu/:id', async (req, res) => {
-    try {
-        const [result] = await pool.query('DELETE FROM menu WHERE id = ?', [req.params.id]);
-        if (result.affectedRows === 0) return res.status(404).json({ error: 'Menu not found' });
-        res.json({ message: 'Menu deleted successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// ลบเมนู
+app.delete('/menu/:id', (req, res) => {
+  const { id } = req.params;
+  connection.query(
+    'DELETE FROM menu WHERE id=?',
+    [id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).send('Error deleting menu item');
+      }
+      res.status(200).send(result);
     }
+  );
 });
 
-// ✅ เริ่มเซิร์ฟเวอร์
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
+// เริ่มเซิร์ฟเวอร์
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Server running on port 3000');
 });
 
+// export app สำหรับการใช้งานใน serverless functions
 module.exports = app;
