@@ -24,40 +24,157 @@ app.get('/', (req, res) => {
     res.send('Welcome to Restaurant API!');
 });
 
-// ดึงข้อมูลร้านอาหารทั้งหมด
+// ดึงข้อมูลร้านอาหารทั้งหมด รวมข้อมูลเมนู
 app.get('/restaurants', (req, res) => {
-    connection.query('SELECT * FROM restaurants', (err, results) => {
+    const sql = `
+        SELECT 
+            r.id AS restaurant_id,
+            r.name AS restaurant_name,
+            r.description AS restaurant_description,
+            r.address AS restaurant_address,
+            r.avatar AS restaurant_avatar,
+            m.id AS menu_id,
+            m.name AS menu_name,
+            m.price AS menu_price,
+            m.description AS menu_description,
+            m.image_url AS menu_image_url
+        FROM restaurants r
+        LEFT JOIN menus m ON r.id = m.restaurant_id;
+    `;
+
+    connection.query(sql, (err, results) => {
         if (err) {
-            console.error('Error fetching restaurants:', err);
+            console.error('Error fetching restaurants and menus:', err);
             res.status(500).send('Internal Server Error');
         } else {
-            res.status(200).json(results);
+            // สร้าง array ของ restaurants โดยมีเมนูเป็น array ภายในแต่ละร้าน
+            const formattedResults = [];
+            let currentRestaurant = null;
+
+            results.forEach(row => {
+                if (currentRestaurant && currentRestaurant.restaurant_id === row.restaurant_id) {
+                    // เพิ่มเมนูเข้าไปในร้านอาหารที่มีอยู่แล้ว
+                    if (row.menu_id) {
+                        currentRestaurant.menu.push({
+                            id: row.menu_id,
+                            name: row.menu_name,
+                            price: row.menu_price,
+                            description: row.menu_description,
+                            image_url: row.menu_image_url
+                        });
+                    }
+                } else {
+                    // สร้างร้านอาหารใหม่
+                    if (currentRestaurant) {
+                        formattedResults.push(currentRestaurant);
+                    }
+                    currentRestaurant = {
+                        id: row.restaurant_id,
+                        name: row.restaurant_name,
+                        description: row.restaurant_description,
+                        address: row.restaurant_address,
+                        avatar: row.restaurant_avatar,
+                        menu: [] // สร้าง array สำหรับเมนู
+                    };
+
+                    // เพิ่มเมนูแรกเข้าไป
+                    if (row.menu_id) {
+                        currentRestaurant.menu.push({
+                            id: row.menu_id,
+                            name: row.menu_name,
+                            price: row.menu_price,
+                            description: row.menu_description,
+                            image_url: row.menu_image_url
+                        });
+                    }
+                }
+            });
+
+            // เพิ่มร้านอาหารสุดท้ายที่ค้างอยู่
+            if (currentRestaurant) {
+                formattedResults.push(currentRestaurant);
+            }
+
+            // ส่งข้อมูลในรูปแบบที่ต้องการ
+            res.status(200).json({ restaurants: formattedResults });
         }
     });
 });
 
-// ดึงข้อมูลร้านอาหารตาม ID
+// ดึงข้อมูลร้านอาหารตาม ID รวมข้อมูลเมนู
 app.get('/restaurants/:id', (req, res) => {
     const { id } = req.params;
-    connection.query('SELECT * FROM restaurants WHERE id = ?', [id], (err, results) => {
+    const sql = `
+        SELECT 
+            r.id AS restaurant_id,
+            r.name AS restaurant_name,
+            r.description AS restaurant_description,
+            r.address AS restaurant_address,
+            r.avatar AS restaurant_avatar,
+            m.id AS menu_id,
+            m.name AS menu_name,
+            m.price AS menu_price,
+            m.description AS menu_description,
+            m.image_url AS menu_image_url
+        FROM restaurants r
+        LEFT JOIN menus m ON r.id = m.restaurant_id
+        WHERE r.id = ?;
+    `;
+
+    connection.query(sql, [id], (err, results) => {
         if (err) {
             console.error('Error fetching restaurant:', err);
             res.status(500).send('Internal Server Error');
         } else {
-            res.status(200).json(results);
-        }
-    });
-});
+            const formattedResults = [];
+            let currentRestaurant = null;
 
-// ดึงเมนูทั้งหมดของร้านอาหารตาม restaurant_id
-app.get('/restaurants/:id/menus', (req, res) => {
-    const { id } = req.params;
-    connection.query('SELECT * FROM menus WHERE restaurant_id = ?', [id], (err, results) => {
-        if (err) {
-            console.error('Error fetching menus:', err);
-            res.status(500).send('Internal Server Error');
-        } else {
-            res.status(200).json(results);
+            results.forEach(row => {
+                if (currentRestaurant && currentRestaurant.restaurant_id === row.restaurant_id) {
+                    // เพิ่มเมนูเข้าไปในร้านอาหารที่มีอยู่แล้ว
+                    if (row.menu_id) {
+                        currentRestaurant.menu.push({
+                            id: row.menu_id,
+                            name: row.menu_name,
+                            price: row.menu_price,
+                            description: row.menu_description,
+                            image_url: row.menu_image_url
+                        });
+                    }
+                } else {
+                    // สร้างร้านอาหารใหม่
+                    if (currentRestaurant) {
+                        formattedResults.push(currentRestaurant);
+                    }
+                    currentRestaurant = {
+                        id: row.restaurant_id,
+                        name: row.restaurant_name,
+                        description: row.restaurant_description,
+                        address: row.restaurant_address,
+                        avatar: row.restaurant_avatar,
+                        menu: [] // สร้าง array สำหรับเมนู
+                    };
+
+                    // เพิ่มเมนูแรกเข้าไป
+                    if (row.menu_id) {
+                        currentRestaurant.menu.push({
+                            id: row.menu_id,
+                            name: row.menu_name,
+                            price: row.menu_price,
+                            description: row.menu_description,
+                            image_url: row.menu_image_url
+                        });
+                    }
+                }
+            });
+
+            // เพิ่มร้านอาหารสุดท้ายที่ค้างอยู่
+            if (currentRestaurant) {
+                formattedResults.push(currentRestaurant);
+            }
+
+            // ส่งข้อมูลในรูปแบบที่ต้องการ
+            res.status(200).json({ restaurants: formattedResults });
         }
     });
 });
