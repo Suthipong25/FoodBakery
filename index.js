@@ -13,12 +13,12 @@ const pool = mysql.createPool(process.env.DATABASE_URL).promise();
 // ตรวจสอบการเชื่อมต่อฐานข้อมูล
 pool.getConnection()
     .then(connection => {
-        console.log('Connected to database.');
+        console.log('✅ Connected to database.');
         connection.release();
     })
-    .catch(err => console.error('Database connection failed:', err.stack));
+    .catch(err => console.error('❌ Database connection failed:', err.stack));
 
-// ดึงร้านอาหารทั้งหมด
+// ✅ ดึงข้อมูลร้านอาหารทั้งหมด
 app.get('/restaurants', async (req, res) => {
     try {
         const [results] = await pool.query('SELECT * FROM restaurants');
@@ -28,7 +28,7 @@ app.get('/restaurants', async (req, res) => {
     }
 });
 
-// ดึงข้อมูลร้านอาหารตาม ID
+// ✅ ดึงข้อมูลร้านอาหารตาม ID
 app.get('/restaurants/:id', async (req, res) => {
     try {
         const [results] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [req.params.id]);
@@ -39,7 +39,7 @@ app.get('/restaurants/:id', async (req, res) => {
     }
 });
 
-// ดึงเมนูของร้านอาหารตาม ID ร้าน
+// ✅ ดึงเมนูของร้านอาหารตาม ID
 app.get('/restaurants/:id/menu', async (req, res) => {
     try {
         const [results] = await pool.query('SELECT * FROM menu WHERE restaurant_id = ?', [req.params.id]);
@@ -49,7 +49,34 @@ app.get('/restaurants/:id/menu', async (req, res) => {
     }
 });
 
-// ✅ ดึงข้อมูลร้านอาหารพร้อมเมนู (แก้ไขใหม่)
+// ✅ ดึงข้อมูลร้านอาหารทั้งหมดพร้อมเมนู
+app.get('/restaurants/full', async (req, res) => {
+    try {
+        // ดึงข้อมูลร้านอาหาร
+        const [restaurants] = await pool.query('SELECT * FROM restaurants');
+
+        if (restaurants.length === 0) {
+            return res.status(404).json({ error: 'No restaurants found' });
+        }
+
+        // ดึงข้อมูลเมนูทั้งหมด
+        const [menus] = await pool.query('SELECT * FROM menu');
+
+        // รวมเมนูเข้ากับร้านอาหารแต่ละร้าน
+        const restaurantsWithMenu = restaurants.map(restaurant => {
+            return {
+                ...restaurant,
+                menu: menus.filter(menu => menu.restaurant_id === restaurant.id)
+            };
+        });
+
+        res.json(restaurantsWithMenu);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ✅ ดึงข้อมูลร้านอาหารพร้อมเมนูตาม ID
 app.get('/restaurants/:id/full', async (req, res) => {
     try {
         const restaurantId = req.params.id;
@@ -66,8 +93,8 @@ app.get('/restaurants/:id/full', async (req, res) => {
 
         // รวมข้อมูลร้านอาหารและเมนู
         const restaurantData = {
-            ...restaurant[0], // ข้อมูลร้านอาหาร
-            menu: menu // ข้อมูลเมนู
+            ...restaurant[0],
+            menu: menu
         };
 
         res.json(restaurantData);
@@ -76,7 +103,7 @@ app.get('/restaurants/:id/full', async (req, res) => {
     }
 });
 
-// เพิ่มร้านอาหารใหม่
+// ✅ เพิ่มร้านอาหารใหม่
 app.post('/restaurants', async (req, res) => {
     try {
         const { name, description, address, avatar } = req.body;
@@ -90,7 +117,7 @@ app.post('/restaurants', async (req, res) => {
     }
 });
 
-// เพิ่มเมนูใหม่ในร้านอาหาร
+// ✅ เพิ่มเมนูใหม่ในร้านอาหาร
 app.post('/menu', async (req, res) => {
     try {
         const { restaurant_id, name, price, description, image_url } = req.body;
@@ -104,7 +131,7 @@ app.post('/menu', async (req, res) => {
     }
 });
 
-// อัปเดตร้านอาหาร
+// ✅ อัปเดตร้านอาหาร
 app.put('/restaurants/:id', async (req, res) => {
     try {
         const { name, description, address, avatar } = req.body;
@@ -119,7 +146,7 @@ app.put('/restaurants/:id', async (req, res) => {
     }
 });
 
-// อัปเดตเมนู
+// ✅ อัปเดตเมนู
 app.put('/menu/:id', async (req, res) => {
     try {
         const { name, price, description, image_url } = req.body;
@@ -134,7 +161,7 @@ app.put('/menu/:id', async (req, res) => {
     }
 });
 
-// ลบร้านอาหาร
+// ✅ ลบร้านอาหาร
 app.delete('/restaurants/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM restaurants WHERE id = ?', [req.params.id]);
@@ -145,7 +172,7 @@ app.delete('/restaurants/:id', async (req, res) => {
     }
 });
 
-// ลบเมนู
+// ✅ ลบเมนู
 app.delete('/menu/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM menu WHERE id = ?', [req.params.id]);
@@ -156,10 +183,10 @@ app.delete('/menu/:id', async (req, res) => {
     }
 });
 
-// เริ่มเซิร์ฟเวอร์
+// ✅ เริ่มเซิร์ฟเวอร์
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`🚀 Server is running on port ${PORT}`);
 });
 
 module.exports = app;
