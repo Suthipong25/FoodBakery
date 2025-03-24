@@ -49,6 +49,33 @@ app.get('/restaurants/:id/menu', async (req, res) => {
     }
 });
 
+// ✅ ดึงข้อมูลร้านอาหารพร้อมเมนู (แก้ไขใหม่)
+app.get('/restaurants/:id/full', async (req, res) => {
+    try {
+        const restaurantId = req.params.id;
+
+        // ดึงข้อมูลร้านอาหาร
+        const [restaurant] = await pool.query('SELECT * FROM restaurants WHERE id = ?', [restaurantId]);
+
+        if (restaurant.length === 0) {
+            return res.status(404).json({ error: 'Restaurant not found' });
+        }
+
+        // ดึงข้อมูลเมนูของร้านอาหาร
+        const [menu] = await pool.query('SELECT * FROM menu WHERE restaurant_id = ?', [restaurantId]);
+
+        // รวมข้อมูลร้านอาหารและเมนู
+        const restaurantData = {
+            ...restaurant[0], // ข้อมูลร้านอาหาร
+            menu: menu // ข้อมูลเมนู
+        };
+
+        res.json(restaurantData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // เพิ่มร้านอาหารใหม่
 app.post('/restaurants', async (req, res) => {
     try {
